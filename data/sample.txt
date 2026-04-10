@@ -1,0 +1,4 @@
+echo This is a sample enterprise document for RAG testing. Retrieval augmented generation combines search with LLM generation to answer questions from documents. Hybrid retrieval uses both BM25 keyword search and dense embeddings for better recall. Reranking improves precision by scoring query-document pairs. > data\sample.txt
+
+# Verify it worked
+type data\sample.txt
