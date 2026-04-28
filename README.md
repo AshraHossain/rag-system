@@ -1,245 +1,136 @@
-# RAG Document Intelligence System
+# 🧠 Production-Grade RAG System (Hybrid Retrieval + Reranking + Evaluation)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** system built with LangChain, FAISS, and Ollama — enabling context-aware question answering over enterprise documents with hybrid retrieval, reranking, and built-in evaluation metrics.
+## 📌 Overview
+
+This project implements a **production-style Retrieval-Augmented Generation (RAG) system** designed to answer user queries using contextual knowledge from structured and unstructured data.
+
+The system goes beyond basic RAG by incorporating:
+
+- Hybrid retrieval (keyword + semantic search)
+- Reranking for improved precision
+- LLM-based response generation
+- Evaluation layer to measure output quality
+- FastAPI backend + Streamlit UI for real-time interaction
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
-```
 User Query
-    ↓
-FastAPI Service Layer (port 8000)
-    ↓
-Hybrid Retriever
-├── Dense: FAISS + nomic-embed-text (semantic search)
-└── Sparse: BM25Okapi (keyword search)
-    ↓
-CrossEncoder Reranker (ms-marco-MiniLM-L-6-v2)
-    ↓
-LLM Generation (Ollama / llama3.2)
-    ↓
-Evaluation Layer (precision@k, hallucination score, answer relevance)
-    ↓
-Streamlit UI (port 8501)
-```
+↓
+Query Processing (Normalization + Embedding)
+↓
+Hybrid Retrieval (BM25 + Vector Search)
+↓
+Reranker (Cross-Encoder / LLM-based)
+↓
+Context Builder (Top-K Selection + Prompt Assembly)
+↓
+LLM Generator (GPT / Claude)
+↓
+Evaluation Layer (RAGAS / Custom Metrics)
+↓
+API Layer (FastAPI)
+↓
+
+
 
 ---
 
-## Why Each Component Exists
+## ⚙️ Tech Stack
 
-| Component | Reason |
-|---|---|
-| **Hybrid Retrieval** | Dense embeddings capture semantic meaning; BM25 handles exact keyword matches. Together they improve recall over either alone. |
-| **CrossEncoder Reranker** | Initial retrieval returns noisy results. A cross-encoder jointly scores query-document pairs for significantly higher precision. |
-| **Context-Constrained Generation** | Prompting the LLM to answer only from retrieved context reduces hallucination. |
-| **Evaluation Layer** | Most RAG systems ship without quality measurement. Built-in metrics enable continuous improvement and production readiness. |
-| **FastAPI Layer** | Converts the pipeline into a deployable, scalable REST service. |
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| API Framework | FastAPI + Uvicorn |
-| LLM Backend | Ollama (llama3.2) — runs locally, zero API cost |
-| Embeddings | Ollama (nomic-embed-text) |
-| Vector Store | FAISS (in-memory, swappable to ChromaDB/Pinecone) |
-| Sparse Retrieval | BM25Okapi (rank-bm25) |
-| Reranker | CrossEncoder (sentence-transformers, ms-marco-MiniLM-L-6-v2) |
-| Document Loading | LangChain TextLoader + RecursiveCharacterTextSplitter |
-| UI | Streamlit |
-| Config | python-dotenv, fully environment-variable driven |
+- **Language:** Python  
+- **Backend:** FastAPI  
+- **Frontend/UI:** Streamlit  
+- **LLM Frameworks:** LangChain / LlamaIndex  
+- **Vector Database:** FAISS / Pinecone / ChromaDB  
+- **LLMs:** OpenAI (GPT-4) / Claude / Gemini  
+- **Evaluation:** RAGAS / Custom metrics  
+- **Deployment (optional):** Docker  
 
 ---
 
-## Project Structure
+## 🚀 Key Features
 
-```
+- 🔍 **Hybrid Retrieval** (BM25 + vector embeddings) for improved recall  
+- 🎯 **Reranking Layer** to prioritize relevant context  
+- 🧠 **LLM-based Answer Generation** with prompt engineering  
+- 📊 **Evaluation Layer** to measure correctness and reduce hallucination  
+- ⚡ **FastAPI Endpoints** for real-time query handling  
+- 🖥️ **Streamlit UI** for interactive querying and visualization  
+
+---
+
+## 📂 Project Structure
+
 rag-system/
-├── app/
-│   ├── main.py           # FastAPI service layer
-│   ├── rag_pipeline.py   # Orchestrator — ties all components together
-│   ├── retriever.py      # Hybrid BM25 + FAISS retriever
-│   ├── reranker.py       # CrossEncoder reranker
-│   ├── evaluator.py      # precision@k, hallucination score, answer relevance
-│   └── config.py         # Centralized config via environment variables
-├── data/
-│   └── sample.txt        # Document corpus (replace with your documents)
-├── ui/
-│   └── streamlit_app.py  # Chat interface
-├── tests/
-├── .env                  # Local config (not committed)
-├── requirements.txt
-├── dockerfile
-└── README.md
-```
+│── app/
+│ ├── retriever/
+│ ├── reranker/
+│ ├── generator/
+│ ├── evaluator/
+│
+│── api/
+│ ├── main.py
+│
+│── ui/
+│ ├── streamlit_app.py
+│
+│── data/
+│
+│── tests/
+│
+│── requirements.txt
+│── README.md
+
+
+
 
 ---
 
-## Quickstart
+## ▶️ How to Run
 
-### Prerequisites
-
-- Python 3.11+
-- [Ollama](https://ollama.com) installed and running
-
-### 1. Clone and set up environment
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/AshraHossain/rag-system.git
+git clone https://github.com/your-username/rag-system.git
 cd rag-system
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Mac/Linux
+2. Install dependencies
 pip install -r requirements.txt
-```
 
-### 2. Pull required Ollama models
+3. Set environment variables
+export OPENAI_API_KEY=your_key_here
 
-```bash
-ollama pull llama3.2
-ollama pull nomic-embed-text
-```
+4. Run FastAPI backend
+uvicorn api.main:app --reload
 
-### 3. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env if needed — defaults work out of the box
-```
-
-### 4. Add your documents
-
-```bash
-# Replace or add documents in the data/ folder
-# Default: data/sample.txt
-```
-
-### 5. Start the system (3 terminals)
-
-```bash
-# Terminal 1 — Ollama (if not already running)
-ollama serve
-
-# Terminal 2 — FastAPI backend
-uvicorn app.main:app --reload --port 8000
-
-# Terminal 3 — Streamlit UI
+5. Run Streamlit UI
 streamlit run ui/streamlit_app.py
-```
 
-### 6. Open the UI
+🧪 Example Query
+Query: What caused the system failure?
 
-```
-http://localhost:8501
-```
+Response:
+The failure was caused by a dependency timeout in the authentication service...
 
-Or query the API directly:
-```
-http://localhost:8000/ask?query=What+is+RAG
-http://localhost:8000/docs   ← Swagger UI
-```
+Confidence Score: 0.87
 
----
+📊 Evaluation
 
-## API
+The system includes an evaluation layer to assess:
 
-### `GET /ask`
+Answer correctness
+Context relevance
+Faithfulness (hallucination detection)
 
-| Parameter | Type | Description |
-|---|---|---|
-| `query` | string | Question to ask against the document corpus |
+Metrics can be computed using RAGAS or custom scoring logic.
 
-**Response:**
-```json
-{
-  "answer": "RAG stands for Retrieval Augmented Generation...",
-  "evaluation": {
-    "precision_at_k": 0.5,
-    "hallucination_score": 0.646,
-    "answer_relevance": 0.462,
-    "num_docs_used": 2
-  }
-}
-```
+🔄 Future Improvements
+Add agentic layer for tool-based reasoning
+Improve reranking with fine-tuned models
+Add caching for faster retrieval
+Deploy using Docker/Kubernetes
+👤 Author
 
----
-
-## Evaluation Metrics
-
-| Metric | Description |
-|---|---|
-| `precision_at_k` | Ratio of retrieved docs that match relevant set |
-| `hallucination_score` | Inverse context overlap — lower means more grounded |
-| `answer_relevance` | Query-answer topic overlap |
-| `num_docs_used` | Number of docs passed to LLM after reranking |
-
-> Note: Ground truth is currently simulated. In production, replace with labeled evaluation datasets (e.g., RAGAS framework).
-
----
-
-## Configuration
-
-All parameters are environment-variable driven via `.env`:
-
-```env
-MODEL_NAME=llama3.2
-OLLAMA_BASE_URL=http://localhost:11434
-EMBEDDING_MODEL=nomic-embed-text
-RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
-CHUNK_SIZE=500
-CHUNK_OVERLAP=50
-TOP_K=3
-DATA_PATH=data/sample.txt
-```
-
----
-
-## Deployment
-
-### Option 1 — HuggingFace Spaces (Demo)
-Fastest path to a public demo for portfolio/recruiter access.
-
-### Option 2 — AWS (Production)
-- FastAPI → ECS / EC2
-- Vector DB → Pinecone
-- Document storage → S3
-- API Gateway for routing
-
-### Option 3 — Docker
-```bash
-docker build -t rag-system .
-docker run -p 8000:8000 rag-system
-```
-
----
-
-## Roadmap
-
-- [ ] Multi-document upload via Streamlit UI
-- [ ] Persistent vector store (ChromaDB)
-- [ ] Cross-encoder reranking with Cohere API
-- [ ] RAGAS evaluation integration
-- [ ] Observability dashboard (response time, token usage, retrieval accuracy)
-- [ ] Docker Compose (API + UI as services)
-- [ ] Query caching layer
-
----
-
-## Real-World Use Cases
-
-- **Enterprise Knowledge Assistant** — internal documentation search
-- **Developer / SDET Assistant** — debug failures using logs and API docs
-- **Compliance Systems** — FAA / FDA / legal documentation retrieval with traceability
-- **Customer Support Automation** — FAQ answering from knowledge base
-
----
-
-## Author
-
-**Ashraf Hossain** — IBM-Certified Generative AI & Agentic AI Engineer  
-16+ years in safety-critical software engineering (FAA aviation systems)
-
-[GitHub](https://github.com/AshraHossain) · [LinkedIn](https://linkedin.com/in/ashrafmhossain)
+Ashrafuzzaman M. Hossain
+AI Engineer | LLM Systems | RAG | Agentic AI
