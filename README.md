@@ -1,136 +1,211 @@
-# 🧠 Production-Grade RAG System (Hybrid Retrieval + Reranking + Evaluation)
+# Production RAG System
 
-## 📌 Overview
-
-This project implements a **production-style Retrieval-Augmented Generation (RAG) system** designed to answer user queries using contextual knowledge from structured and unstructured data.
-
-The system goes beyond basic RAG by incorporating:
-
-- Hybrid retrieval (keyword + semantic search)
-- Reranking for improved precision
-- LLM-based response generation
-- Evaluation layer to measure output quality
-- FastAPI backend + Streamlit UI for real-time interaction
+Hybrid retrieval · Cross-encoder reranking · Streaming answers · RAGas evaluation
 
 ---
 
-## 🏗️ Architecture
+## Overview
 
+A production-grade Retrieval-Augmented Generation system that answers questions from your documents. Designed for accuracy over basic RAG by combining keyword and semantic search, re-scoring retrieved passages with a cross-encoder, and streaming LLM responses token-by-token.
+
+**Runs fully locally** — no OpenAI required. Uses Ollama for LLM inference and local HuggingFace models for embeddings and reranking.
+
+---
+
+## Architecture
+
+```
 User Query
-↓
-Query Processing (Normalization + Embedding)
-↓
-Hybrid Retrieval (BM25 + Vector Search)
-↓
-Reranker (Cross-Encoder / LLM-based)
-↓
-Context Builder (Top-K Selection + Prompt Assembly)
-↓
-LLM Generator (GPT / Claude)
-↓
-Evaluation Layer (RAGAS / Custom Metrics)
-↓
-API Layer (FastAPI)
-↓
-
-
+    ↓
+Hybrid Retrieval
+  ├── BM25 keyword search (rank-bm25)
+  └── Dense vector search (FAISS + bge-small-en-v1.5)
+    ↓
+Cross-Encoder Reranking (ms-marco-MiniLM-L-6-v2)
+    ↓
+Context Assembly (top-K passages)
+    ↓
+LLM Generation — streamed token-by-token (Ollama / OpenRouter)
+    ↓
+Evaluation (answer relevance · hallucination score · context recall)
+    ↓
+FastAPI  →  Streamlit UI
+```
 
 ---
 
-## ⚙️ Tech Stack
+## Tech Stack
 
-- **Language:** Python  
-- **Backend:** FastAPI  
-- **Frontend/UI:** Streamlit  
-- **LLM Frameworks:** LangChain / LlamaIndex  
-- **Vector Database:** FAISS / Pinecone / ChromaDB  
-- **LLMs:** OpenAI (GPT-4) / Claude / Gemini  
-- **Evaluation:** RAGAS / Custom metrics  
-- **Deployment (optional):** Docker  
-
----
-
-## 🚀 Key Features
-
-- 🔍 **Hybrid Retrieval** (BM25 + vector embeddings) for improved recall  
-- 🎯 **Reranking Layer** to prioritize relevant context  
-- 🧠 **LLM-based Answer Generation** with prompt engineering  
-- 📊 **Evaluation Layer** to measure correctness and reduce hallucination  
-- ⚡ **FastAPI Endpoints** for real-time query handling  
-- 🖥️ **Streamlit UI** for interactive querying and visualization  
+| Layer | Technology |
+|---|---|
+| LLM | Ollama (local) — mistral:7b, llama3.2, etc. |
+| Embeddings | HuggingFace `BAAI/bge-small-en-v1.5` (local, no API key) |
+| Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` (sentence-transformers) |
+| Vector store | FAISS (in-memory) |
+| Sparse retrieval | BM25 (rank-bm25) |
+| RAG framework | LangChain |
+| Backend API | FastAPI |
+| UI | Streamlit |
+| Evaluation | Custom heuristics + RAGas batch evaluation |
+| Deployment | Docker Compose |
 
 ---
 
-## 📂 Project Structure
+## Features
 
+- **Hybrid retrieval** — BM25 + dense embeddings fused before reranking, improving recall over either alone
+- **Cross-encoder reranking** — joint query-document scoring for precision; same technique used by Cohere Rerank
+- **Streaming answers** — tokens arrive via SSE as the model generates, no timeout regardless of model speed
+- **Document upload** — ingest `.txt` or `.pdf` files at runtime without restarting the server
+- **Per-query evaluation** — answer relevance, hallucination score, and context recall shown after every response
+- **Batch RAGas evaluation** — `POST /evaluate` endpoint runs faithfulness + answer relevancy via RAGas
+- **Dual LLM backend** — switch between local Ollama and OpenRouter with one env var
+
+---
+
+## Project Structure
+
+```
 rag-system/
-│── app/
-│ ├── retriever/
-│ ├── reranker/
-│ ├── generator/
-│ ├── evaluator/
-│
-│── api/
-│ ├── main.py
-│
-│── ui/
-│ ├── streamlit_app.py
-│
-│── data/
-│
-│── tests/
-│
-│── requirements.txt
-│── README.md
-
-
-
+├── app/
+│   ├── config.py          # All config from environment variables
+│   ├── retriever.py       # HybridRetriever (BM25 + FAISS)
+│   ├── reranker.py        # Cross-encoder reranking
+│   ├── rag_pipeline.py    # run_rag() and stream_rag() orchestration
+│   ├── evaluator.py       # Heuristic metrics + RAGas batch eval
+│   └── main.py            # FastAPI app and all endpoints
+├── ui/
+│   └── streamlit_app.py   # Streamlit frontend
+├── data/
+│   └── sample.txt         # Sample enterprise knowledge base
+├── tests/
+│   └── test_evaluator.py  # Unit tests (no LLM/network needed)
+├── dockerfile
+├── dockerfile.ui
+├── docker-compose.yml
+├── requirements.txt
+└── .env.example
+```
 
 ---
 
-## ▶️ How to Run
+## Quick Start (Local)
 
-### 1. Clone the repository
+### Prerequisites
+
+- Python 3.11+
+- [Ollama](https://ollama.ai) installed and running
+- A model pulled: `ollama pull mistral:7b`
+
+### Setup
 
 ```bash
-git clone https://github.com/your-username/rag-system.git
+git clone https://github.com/AshraHossain/rag-system.git
 cd rag-system
-2. Install dependencies
-pip install -r requirements.txt
 
-3. Set environment variables
-export OPENAI_API_KEY=your_key_here
+python -m venv venv
+.\venv\Scripts\activate          # Windows
+# source venv/bin/activate       # macOS/Linux
 
-4. Run FastAPI backend
-uvicorn api.main:app --reload
+pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 
-5. Run Streamlit UI
+cp .env.example .env
+# Edit .env and set OLLAMA_MODEL to your pulled model name
+```
+
+### Run
+
+```bash
+# Terminal 1 — API
+uvicorn app.main:app --reload
+
+# Terminal 2 — UI
 streamlit run ui/streamlit_app.py
+```
 
-🧪 Example Query
-Query: What caused the system failure?
+| Service | URL |
+|---|---|
+| Streamlit UI | http://localhost:8501 |
+| FastAPI | http://localhost:8000 |
+| API docs (Swagger) | http://localhost:8000/docs |
 
-Response:
-The failure was caused by a dependency timeout in the authentication service...
+First startup downloads the embedding model (~130 MB) and reranker (~90 MB) — cached after that.
 
-Confidence Score: 0.87
+---
 
-📊 Evaluation
+## Docker
 
-The system includes an evaluation layer to assess:
+```bash
+# Copy and fill in your env
+cp .env.example .env
 
-Answer correctness
-Context relevance
-Faithfulness (hallucination detection)
+docker-compose up --build
+```
 
-Metrics can be computed using RAGAS or custom scoring logic.
+---
 
-🔄 Future Improvements
-Add agentic layer for tool-based reasoning
-Improve reranking with fine-tuned models
-Add caching for faster retrieval
-Deploy using Docker/Kubernetes
-👤 Author
+## Environment Variables
 
-Ashrafuzzaman M. Hossain
-AI Engineer | LLM Systems | RAG | Agentic AI
+```bash
+# LLM backend: "ollama" (default) or "openrouter"
+LLM_BACKEND=ollama
+
+# Ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=mistral:7b
+
+# OpenRouter (used when LLM_BACKEND=openrouter)
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=google/gemma-2-9b-it:free
+
+# Embeddings (local, no API key needed)
+EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+
+# Retrieval
+CHUNK_SIZE=500
+CHUNK_OVERLAP=50
+TOP_K=5
+```
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Server status and document count |
+| `GET` | `/ask?query=...` | Full response with evaluation metrics |
+| `GET` | `/ask/stream?query=...` | Streaming SSE response (token-by-token) |
+| `POST` | `/upload` | Ingest a `.txt` or `.pdf` file |
+| `POST` | `/evaluate` | Batch RAGas evaluation with ground truths |
+
+---
+
+## Evaluation Metrics
+
+Every `/ask` response includes:
+
+| Metric | Description |
+|---|---|
+| `answer_relevance` | Word overlap between query and answer |
+| `hallucination_score` | Fraction of answer words not found in context (lower = better) |
+| `context_recall` | Fraction of answer words present in retrieved context |
+| `num_docs_used` | Number of passages passed to the LLM |
+
+For rigorous batch evaluation with ground-truth answers, use `POST /evaluate` which runs RAGas faithfulness and answer relevancy.
+
+---
+
+## Tests
+
+```bash
+pytest tests/ -v
+```
+
+Unit tests cover all evaluator functions. No LLM or network connection required.
+
+---
+
+## Author
+
+**Ashrafuzzaman M. Hossain** — AI Engineer · LLM Systems · RAG · Agentic AI
