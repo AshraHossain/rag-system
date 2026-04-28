@@ -259,3 +259,57 @@ def test_add_documents_are_retrievable(unstructured_retriever):
     )
     texts = [d.page_content for d in results]
     assert any("contrastive" in t or "zero-shot" in t for t in texts)
+
+
+# ---------------------------------------------------------------------------
+# 21–25  Negative tests (robustness and graceful degradation)
+# ---------------------------------------------------------------------------
+
+def test_retrieve_empty_query_does_not_raise(unstructured_retriever):
+    # An empty string should not crash; FAISS + BM25 handle it silently
+    try:
+        results = unstructured_retriever.retrieve("")
+        assert isinstance(results, list)
+    except Exception as exc:
+        pytest.fail(f"Empty query raised unexpectedly: {exc}")
+
+
+def test_retrieve_special_characters_only_does_not_raise(unstructured_retriever):
+    # Punctuation-only query must not crash BM25 or FAISS
+    try:
+        results = unstructured_retriever.retrieve("!!! ??? ### *** |||")
+        assert isinstance(results, list)
+    except Exception as exc:
+        pytest.fail(f"Special-char query raised unexpectedly: {exc}")
+
+
+def test_retrieve_irrelevant_query_returns_no_keyword_hits(unstructured_retriever):
+    # Query about cooking shares zero keywords with the ML corpus;
+    # none of the returned documents should contain these words
+    query = "chocolate cake butter sugar baking oven recipe"
+    results = unstructured_retriever.retrieve(query)
+    query_words = set(query.lower().split())
+    for doc in results:
+        doc_words = set(doc.page_content.lower().split())
+        assert not query_words & doc_words, (
+            f"Unexpected keyword overlap in: {doc.page_content}"
+        )
+
+
+def test_add_empty_list_does_not_change_index(unstructured_retriever):
+    # Adding zero documents must be a no-op
+    original_count = len(unstructured_retriever.documents)
+    with _PATCH:
+        unstructured_retriever.add_documents([])
+    assert len(unstructured_retriever.documents) == original_count
+    assert unstructured_retriever.bm25.corpus_size == original_count
+
+
+def test_retrieve_k_larger_than_corpus_does_not_raise(unstructured_retriever):
+    # Requesting more results than documents in the index must not crash
+    try:
+        results = unstructured_retriever.retrieve("retrieval", k=1000)
+        # Can return at most as many docs as exist in the corpus
+        assert len(results) <= len(unstructured_retriever.documents)
+    except Exception as exc:
+        pytest.fail(f"k > corpus size raised unexpectedly: {exc}")

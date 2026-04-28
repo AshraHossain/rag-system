@@ -23,6 +23,8 @@ class HybridRetriever:
         self.bm25 = BM25Okapi([t.split() for t in self.texts])
 
     def add_documents(self, new_docs: list[Document]) -> None:
+        if not new_docs:
+            return
         self.documents.extend(new_docs)
         self.texts.extend([doc.page_content for doc in new_docs])
         new_store = FAISS.from_documents(new_docs, _get_embeddings())
