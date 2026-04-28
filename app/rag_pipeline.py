@@ -1,3 +1,6 @@
+import json
+from typing import Generator
+
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -58,3 +61,30 @@ def run_rag(query: str, retriever) -> dict:
         "sources": [doc.page_content[:300] for doc in ranked],
         "evaluation": evaluate_response(query, ranked, answer),
     }
+
+
+def stream_rag(query: str, retriever) -> Generator[str, None, None]:
+    try:
+        llm = _get_llm()
+        retrieved = retriever.retrieve(query)
+        ranked = rerank(query, retrieved)
+        context = "\n\n".join(doc.page_content for doc in ranked)
+        messages = [
+            (
+                "system",
+                "Answer ONLY using the provided context. "
+                "If the context does not contain enough information, say so.",
+            ),
+            ("user", f"Context:\n{context}\n\nQuestion: {query}"),
+        ]
+        full_answer = ""
+        for chunk in llm.stream(messages):
+            token = chunk.content
+            full_answer += token
+            yield f"data: {json.dumps({'token': token})}\n\n"
+
+        evaluation = evaluate_response(query, ranked, full_answer)
+        sources = [doc.page_content[:300] for doc in ranked]
+        yield f"data: {json.dumps({'done': True, 'evaluation': evaluation, 'sources': sources})}\n\n"
+    except Exception as exc:
+        yield f"data: {json.dumps({'error': str(exc)})}\n\n"

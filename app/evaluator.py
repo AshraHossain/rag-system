@@ -1,3 +1,6 @@
+from typing import Any, cast
+
+
 def hallucination_score(answer: str, context_docs: list) -> float:
     context_words = set()
     for doc in context_docs:
@@ -40,7 +43,7 @@ def run_ragas_evaluation(
     questions: list,
     answers: list,
     contexts: list,
-    ground_truths: list = None,
+    ground_truths: list | None = None,
 ) -> dict:
     """Batch RAGas evaluation. Requires OPENAI_API_KEY in environment."""
     try:
@@ -71,8 +74,22 @@ def run_ragas_evaluation(
         if ground_truths:
             data["ground_truth"] = ground_truths
 
-        result = evaluate(Dataset.from_dict(data), metrics=metrics)
-        return dict(result)
+        result = cast(Any, evaluate(Dataset.from_dict(data), metrics=metrics))
+        if hasattr(result, "to_pandas"):
+            raw = result.to_pandas().mean(numeric_only=True).to_dict()
+        elif hasattr(result, "scores"):
+            merged: dict = {}
+            for row in result.scores:
+                for k, v in row.items():
+                    merged.setdefault(k, []).append(v)
+            raw = {k: sum(v) / len(v) for k, v in merged.items()}
+        else:
+            raw = vars(result)
+        return {
+            k: round(float(v), 4)
+            for k, v in raw.items()
+            if isinstance(v, (int, float))
+        }
     except Exception as exc:
         return {
             "error": str(exc),

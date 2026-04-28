@@ -1,3 +1,4 @@
+import json
 import os
 
 import requests
@@ -56,48 +57,58 @@ with st.sidebar:
 # ── Main query ───────────────────────────────────────────────────────────────
 query = st.text_input("Ask a question about your documents:")
 if st.button("Ask", type="primary") and query.strip():
-    with st.spinner("Retrieving and generating…"):
-        try:
-            res = requests.get(
-                f"{API_URL}/ask",
-                params={"query": query},
-                timeout=60,
-            )
+    try:
+        answer_box = st.empty()
+        full_answer = ""
+        evaluation = {}
+        sources = []
+
+        with requests.get(
+            f"{API_URL}/ask/stream",
+            params={"query": query},
+            stream=True,
+            timeout=300,
+        ) as res:
             if not res.ok:
                 st.error(f"API error {res.status_code}: {res.text}")
                 st.stop()
-            data = res.json()
 
-            st.subheader("Answer")
-            st.write(data["answer"])
+            for line in res.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                data = json.loads(line[6:])
+                if "error" in data:
+                    st.error(data["error"])
+                    st.stop()
+                elif "token" in data:
+                    full_answer += data["token"]
+                    answer_box.markdown(full_answer + "▌")
+                elif data.get("done"):
+                    answer_box.markdown(full_answer)
+                    evaluation = data.get("evaluation", {})
+                    sources = data.get("sources", [])
 
-            with st.expander("Source passages"):
-                for i, src in enumerate(data.get("sources", []), 1):
-                    st.markdown(f"**[{i}]** {src}…")
+        with st.expander("Source passages"):
+            for i, src in enumerate(sources, 1):
+                st.markdown(f"**[{i}]** {src}…")
 
-            with st.expander("Evaluation metrics"):
-                ev = data.get("evaluation", {})
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric(
-                    "Answer relevance",
-                    ev.get("answer_relevance", "—"),
-                )
-                c2.metric(
-                    "Hallucination score",
-                    ev.get("hallucination_score", "—"),
-                    help="Lower is better (0 = fully grounded)",
-                )
-                c3.metric(
-                    "Context recall",
-                    ev.get("context_recall", "—"),
-                )
-                c4.metric("Docs used", ev.get("num_docs_used", "—"))
+        with st.expander("Evaluation metrics"):
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Answer relevance",
+                      evaluation.get("answer_relevance", "—"))
+            c2.metric("Hallucination score",
+                      evaluation.get("hallucination_score", "—"),
+                      help="Lower is better (0 = fully grounded)")
+            c3.metric("Context recall",
+                      evaluation.get("context_recall", "—"))
+            c4.metric("Docs used",
+                      evaluation.get("num_docs_used", "—"))
 
-        except requests.exceptions.ConnectionError:
-            st.error(
-                "Cannot reach backend. "
-                "Start the FastAPI server with: "
-                "`uvicorn app.main:app --reload`"
-            )
-        except Exception as exc:
-            st.error(f"Error: {exc}")
+    except requests.exceptions.ConnectionError:
+        st.error(
+            "Cannot reach backend. "
+            "Start the FastAPI server with: "
+            "`uvicorn app.main:app --reload`"
+        )
+    except Exception as exc:
+        st.error(f"Error: {exc}")

@@ -1,13 +1,16 @@
 import os
 import tempfile
 
+from typing import Optional
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.config import CHUNK_OVERLAP, CHUNK_SIZE
 from app.evaluator import run_ragas_evaluation
-from app.rag_pipeline import load_documents, run_rag
+from app.rag_pipeline import load_documents, run_rag, stream_rag
 from app.retriever import HybridRetriever
 
 app = FastAPI(title="RAG System API", version="1.0.0")
@@ -38,8 +41,20 @@ def ask(query: str):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/ask/stream")
+def ask_stream(query: str):
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    return StreamingResponse(
+        stream_rag(query, retriever),
+        media_type="text/event-stream",
+    )
+
+
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in (".txt", ".pdf"):
         raise HTTPException(
@@ -80,7 +95,7 @@ class EvaluateRequest(BaseModel):
     questions: list[str]
     answers: list[str]
     contexts: list[list[str]]
-    ground_truths: list[str] = None
+    ground_truths: Optional[list[str]] = None
 
 
 @app.post("/evaluate")
