@@ -136,11 +136,23 @@ First startup downloads the embedding model (~130 MB) and reranker (~90 MB) — 
 ## Docker
 
 ```bash
-# Copy and fill in your env
-cp .env.example .env
-
+cp .env.example .env   # fill in OLLAMA_MODEL etc.
 docker-compose up --build
 ```
+
+The API container reaches your host Ollama via `host.docker.internal:11434`,
+which works automatically on Docker Desktop (Windows and Mac).
+
+**Linux users** — add this to the `api` service in `docker-compose.yml`:
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+The HuggingFace embedding and reranker models are stored in a named volume
+(`hf_cache`) so they survive `docker-compose down` and only download once.
+The UI container is kept minimal — it installs only `streamlit` and `requests`,
+not the full ML stack.
 
 ---
 
